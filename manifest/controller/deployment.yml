@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sik-deployment
+  namespace: sik-controller
+  labels:
+    app: sik
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sik
+  template:
+    metadata:
+      labels:
+        app: sik
+    spec:
+      containers:
+      - name: sik
+        image: mahakal0510/lister:0.1.1
+        resources:
+          limits:
+            memory: "256Mi"  
+            cpu: "100m"      
+          requests:
+            memory: "128Mi"  
+            cpu: "50m"       

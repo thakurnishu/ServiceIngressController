@@ -2,10 +2,12 @@ package main
 
 import (
 	"flag"
-	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/fatih/color"
 
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -18,7 +20,7 @@ func KubeconfigHome() string {
 	// To get kubeconfig file location
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		fmt.Printf("ERROR getting UserHome dir: \n%v\n", err.Error())
+		log.Printf("ERROR getting UserHome dir \n%v\n", err.Error())
 	}
 
 	kubeconfigPath := filepath.Join(homeDir, ".kube", "config")
@@ -34,20 +36,20 @@ func GetTypedClientSet(kubeconfig *string) *kubernetes.Clientset {
 
 		config, err = clientcmd.BuildConfigFromFlags("", *kubeconfig)
 		if err != nil {
-			fmt.Printf("ERROR Building Config from Flag: \n%v\n", err.Error())
+			log.Fatalf("[ERROR Building Config from Flag] \n%v\n", err.Error())
 		}
 	} else {
 
 		config, err = rest.InClusterConfig()
 		if err != nil {
-			fmt.Printf("ERROR getting Config from K8S Cluster: \n%v\n", err.Error())
+			log.Fatalf("ERROR getting Config from K8S Cluster \n%v\n", err.Error())
 		}
 	}
 
 	// Typed ClientSet
 	clientSet, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		fmt.Printf("ERROR Creating Typed ClientSet from Config: \n%v\n", err.Error())
+		log.Fatalf("ERROR Creating Typed ClientSet from Config \n%v\n", err.Error())
 	}
 
 	return clientSet
@@ -55,6 +57,7 @@ func GetTypedClientSet(kubeconfig *string) *kubernetes.Clientset {
 
 func main() {
 
+	color.Set(color.FgHiRed)
 	kubeconfigHome := KubeconfigHome()
 	// File location from user ( --kubeconfig ) or homeDir/.kube/config
 	kubeconfig := flag.String("kubeconfig", kubeconfigHome, "Location of KubeConfig file")
@@ -70,6 +73,7 @@ func main() {
 	// Deployment Informer
 	deploymentInformer := sharedInformerFactory.Apps().V1().Deployments()
 
+	color.Unset()
 	ch := make(chan struct{})
 
 	c := newController(clientset, deploymentInformer)

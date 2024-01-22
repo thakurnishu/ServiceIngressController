@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
+	"github.com/fatih/color"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
@@ -48,10 +50,15 @@ func newController(clientset *kubernetes.Clientset, deploymentInformer appsInfor
 
 func (c *controller) run(ch <-chan struct{}) {
 
-	fmt.Println("NOTE: Starting Controller...")
+	color.Set(color.FgHiGreen)
+	log.Println("Starting Controller...")
+	color.Unset()
 
+	// if false fail
 	if !cache.WaitForCacheSync(ch, c.isDeploymentCacheSynced) {
-		fmt.Printf("ERROR: waiting for cache to be sycned\n")
+		color.Set(color.FgHiRed)
+		log.Fatalf("ERROR: waiting for cache to be sycned\n")
+		color.Unset()
 	}
 
 	go wait.Until(c.worker, 1*time.Second, ch)
@@ -67,6 +74,7 @@ func (c *controller) worker() {
 
 func (c *controller) processItem() bool {
 
+	color.Set(color.FgHiRed)
 	item, shutdown := c.queue.Get()
 	if shutdown {
 		return false
@@ -76,7 +84,7 @@ func (c *controller) processItem() bool {
 
 	key, err := cache.MetaNamespaceKeyFunc(item)
 	if err != nil {
-		fmt.Printf("ERROR: getting key from cache\n%s\n", err.Error())
+		log.Fatalf("ERROR: getting key from cache\n%s\n", err.Error())
 	}
 
 	nameSpace, name, err := cache.SplitMetaNamespaceKey(key)
@@ -99,19 +107,20 @@ func (c *controller) processItem() bool {
 	err = c.syncDeployment(nameSpace, name)
 	if err != nil {
 		// re-try
-
 		fmt.Printf("ERROR: syncing deployment\n%s\n", err.Error())
 		return false
 	}
 
+	color.Unset()
 	return true
 }
 
 func (c *controller) syncDeployment(nameSpace, name string) error {
 
+	color.Set(color.FgHiRed)
 	deployment, err := c.deploymentLister.Deployments(nameSpace).Get(name)
 	if err != nil {
-		fmt.Printf("ERROR: getting deployment\n%s\n", err.Error())
+		log.Fatalf("ERROR: getting deployment\n%s\n", err.Error())
 	}
 
 	ctx := context.Background()
@@ -119,63 +128,16 @@ func (c *controller) syncDeployment(nameSpace, name string) error {
 	// Create SVC
 	svc, err := c.createService(deployment, ctx)
 	if err != nil {
-		fmt.Printf("ERROR: creating service\n%s\n", err.Error())
+		log.Fatalf("ERROR: creating service\n%s\n", err.Error())
 	}
 
 	// Create Ingress
 	err = c.createIngress(*svc, ctx)
 	if err != nil {
-		fmt.Printf("ERROR: creating ingress\n%s\n", err.Error())
+		log.Fatalf("ERROR: creating ingress\n%s\n", err.Error())
 	}
+	color.Unset()
 	return nil
-}
-
-func (c *controller) createIngress(svc corev1.Service, ctx context.Context) error {
-
-	/*
-		we have to figure out port where
-			our svc is expose
-	*/
-	deploymentName := strings.TrimSuffix(svc.Name, "-svc")
-	path := fmt.Sprintf("/%s", deploymentName)
-	pathType := "Prefix"
-
-	ingress := netv1.Ingress{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      deploymentName + "-ingress",
-			Namespace: svc.Namespace,
-			Annotations: map[string]string{
-				"nginx.ingress.kubernetes.io/rewrite-target": "/",
-			},
-		},
-		Spec: netv1.IngressSpec{
-			Rules: []netv1.IngressRule{
-				{
-					IngressRuleValue: netv1.IngressRuleValue{
-						HTTP: &netv1.HTTPIngressRuleValue{
-							Paths: []netv1.HTTPIngressPath{
-								{
-									Path:     path,
-									PathType: (*netv1.PathType)(&pathType),
-									Backend: netv1.IngressBackend{
-										Service: &netv1.IngressServiceBackend{
-											Name: svc.Name,
-											Port: netv1.ServiceBackendPort{
-												Number: 80,
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	_, err := c.clientset.NetworkingV1().Ingresses(svc.Namespace).Create(ctx, &ingress, metav1.CreateOptions{})
-	return err
 }
 
 func (c *controller) createService(deployment *appsv1.Deployment, ctx context.Context) (*corev1.Service, error) {
@@ -206,16 +168,70 @@ func (c *controller) createService(deployment *appsv1.Deployment, ctx context.Co
 	return s, err
 }
 
+func (c *controller) createIngress(svc corev1.Service, ctx context.Context) error {
+
+	/*
+		we have to figure out port where
+			our svc is expose
+	*/
+	deploymentName := strings.TrimSuffix(svc.Name, "-svc")
+	path := fmt.Sprintf("/%s", svc.Name)
+	pathType := "Prefix"
+	ingressClassName := "nginx"
+
+	ingress := netv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      deploymentName + "-ingress",
+			Namespace: svc.Namespace,
+			Annotations: map[string]string{
+				"nginx.ingress.kubernetes.io/rewrite-target": "/",
+			},
+		},
+		Spec: netv1.IngressSpec{
+			IngressClassName: &ingressClassName,
+			Rules: []netv1.IngressRule{
+				{
+					IngressRuleValue: netv1.IngressRuleValue{
+
+						HTTP: &netv1.HTTPIngressRuleValue{
+
+							Paths: []netv1.HTTPIngressPath{
+								{
+									Path:     path,
+									PathType: (*netv1.PathType)(&pathType),
+									Backend: netv1.IngressBackend{
+
+										Service: &netv1.IngressServiceBackend{
+
+											Name: svc.Name,
+											Port: netv1.ServiceBackendPort{
+
+												Number: 80,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	_, err := c.clientset.NetworkingV1().Ingresses(svc.Namespace).Create(ctx, &ingress, metav1.CreateOptions{})
+	return err
+}
+
 func (c *controller) handleAdd(new interface{}, isInInitialList bool) {
 
-	fmt.Println("Add was Called")
 	c.queue.Add(new)
 }
 
 func (c *controller) handleDelete(del interface{}) {
 
-	fmt.Println("Delete was Called")
-	c.queue.Add(del)
+	fmt.Println("deployment deleted")
+	// c.queue.Add(del)
 }
 
 /*
