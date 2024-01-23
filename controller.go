@@ -11,6 +11,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	appsInformer "k8s.io/client-go/informers/apps/v1"
@@ -93,6 +94,18 @@ func (c *controller) processItem() bool {
 		return false
 	}
 
+	ctx := context.Background()
+	// Check if object is still in cluster (added/deleted)
+	_, err = c.clientset.AppsV1().Deployments(nameSpace).Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		fmt.Printf("deleting resources %s\n", name)
+		return c.deleteResources(nameSpace, name)
+	}
+	return c.createResources(nameSpace, name)
+
+}
+
+func (c *controller) createResources(nameSpace, name string) bool {
 	// Check Deployment in k8s cluster system namespace
 	if systemNamespaces := map[string]bool{
 		"kube-node-lease":    true,
@@ -100,11 +113,13 @@ func (c *controller) processItem() bool {
 		"kube-system":        true,
 		"local-path-storage": true,
 		"ingress-nginx":      true,
+		"sik-controller":     true,
 	}; systemNamespaces[nameSpace] {
 		return true
 	}
 
-	err = c.syncDeployment(nameSpace, name)
+	fmt.Printf("creating resources %s\n", name)
+	err := c.syncDeployment(nameSpace, name)
 	if err != nil {
 		// re-try
 		fmt.Printf("ERROR: syncing deployment\n%s\n", err.Error())
@@ -112,6 +127,24 @@ func (c *controller) processItem() bool {
 	}
 
 	color.Unset()
+	return true
+}
+
+func (c *controller) deleteResources(nameSpace, name string) bool {
+
+	ctx := context.Background()
+	// delete service
+	err := c.clientset.CoreV1().Services(nameSpace).Delete(ctx, name+"-svc", metav1.DeleteOptions{})
+	if err != nil {
+		fmt.Printf("failed to delete service: %s-svc", name)
+	}
+
+	// delete ingress
+	err = c.clientset.NetworkingV1().Ingresses(nameSpace).Delete(ctx, name+"-ingress", metav1.DeleteOptions{})
+	if err != nil {
+		fmt.Printf("failed to delete ingress: %s-ingress", name)
+	}
+
 	return true
 }
 
@@ -225,13 +258,14 @@ func (c *controller) createIngress(svc corev1.Service, ctx context.Context) erro
 
 func (c *controller) handleAdd(new interface{}, isInInitialList bool) {
 
+	fmt.Println("Added")
 	c.queue.Add(new)
 }
 
 func (c *controller) handleDelete(del interface{}) {
 
-	fmt.Println("deployment deleted")
-	// c.queue.Add(del)
+	fmt.Println("Deleted")
+	c.queue.Add(del)
 }
 
 /*

@@ -1,18 +1,27 @@
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+kind: ClusterRole
 metadata:
   name: sik-role
-  namespace: sik-controller
 rules:
 - apiGroups:
   - ""
   resources:
-  - pods
+  - services
   verbs:
-  - list
+  - create
+  - delete
 - apiGroups:
   - apps
   resources:
   - deployments
   verbs:
   - list
+  - watch
+  - get
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses
+  verbs:
+  - create
+  - delete
