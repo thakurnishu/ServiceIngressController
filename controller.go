@@ -90,7 +90,7 @@ func (c *controller) processItem() bool {
 
 	nameSpace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
-		fmt.Printf("ERROR: spliting key to namespace and name\n%s\n", err.Error())
+		log.Fatalf("ERROR: spliting key to namespace and name\n%s\n", err.Error())
 		return false
 	}
 
@@ -98,7 +98,7 @@ func (c *controller) processItem() bool {
 	// Check if object is still in cluster (added/deleted)
 	_, err = c.clientset.AppsV1().Deployments(nameSpace).Get(ctx, name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
-		fmt.Printf("deleting resources %s\n", name)
+		log.Printf("deleting resources %s\n", name)
 		return c.deleteResources(nameSpace, name)
 	}
 	return c.createResources(nameSpace, name)
@@ -118,11 +118,11 @@ func (c *controller) createResources(nameSpace, name string) bool {
 		return true
 	}
 
-	fmt.Printf("creating resources %s\n", name)
+	log.Printf("creating resources %s\n", name)
 	err := c.syncDeployment(nameSpace, name)
 	if err != nil {
 		// re-try
-		fmt.Printf("ERROR: syncing deployment\n%s\n", err.Error())
+		log.Fatalf("ERROR: syncing deployment\n%s\n", err.Error())
 		return false
 	}
 
@@ -136,13 +136,13 @@ func (c *controller) deleteResources(nameSpace, name string) bool {
 	// delete service
 	err := c.clientset.CoreV1().Services(nameSpace).Delete(ctx, name+"-svc", metav1.DeleteOptions{})
 	if err != nil {
-		fmt.Printf("failed to delete service: %s-svc", name)
+		log.Fatalf("failed to delete service: %s-svc", name)
 	}
 
 	// delete ingress
 	err = c.clientset.NetworkingV1().Ingresses(nameSpace).Delete(ctx, name+"-ingress", metav1.DeleteOptions{})
 	if err != nil {
-		fmt.Printf("failed to delete ingress: %s-ingress", name)
+		log.Fatalf("failed to delete ingress: %s-ingress", name)
 	}
 
 	return true
@@ -258,13 +258,13 @@ func (c *controller) createIngress(svc corev1.Service, ctx context.Context) erro
 
 func (c *controller) handleAdd(new interface{}, isInInitialList bool) {
 
-	fmt.Println("Added")
+	log.Println("Added")
 	c.queue.Add(new)
 }
 
 func (c *controller) handleDelete(del interface{}) {
 
-	fmt.Println("Deleted")
+	log.Println("Deleted")
 	c.queue.Add(del)
 }
 
