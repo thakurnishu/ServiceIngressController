@@ -58,7 +58,7 @@ func (c *controller) run(ch <-chan struct{}) {
 	// if false fail
 	if !cache.WaitForCacheSync(ch, c.isDeploymentCacheSynced) {
 		color.Set(color.FgHiRed)
-		log.Fatalf("ERROR: waiting for cache to be sycned\n")
+		log.Printf("waiting for cache to be sycned\n")
 		color.Unset()
 	}
 
