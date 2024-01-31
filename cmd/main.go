@@ -14,10 +14,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-  
-    appsInformer "k8s.io/client-go/informers/apps/v1"
-    coreInformer "k8s.io/client-go/informers/core/v1"
-    netInformer "k8s.io/client-go/informers/networking/v1"
 )    
 
 func KubeconfigHome() string {
